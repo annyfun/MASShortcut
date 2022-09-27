@@ -3,6 +3,7 @@
 
 @interface MASShortcutBinder ()
 @property(strong) NSMutableDictionary *actions;
+@property(strong) NSMutableDictionary *actionsUp;
 @property(strong) NSMutableDictionary *shortcuts;
 @end
 
@@ -14,6 +15,7 @@
 {
     self = [super init];
     [self setActions:[NSMutableDictionary dictionary]];
+    [self setActionsUp:[NSMutableDictionary dictionary]];
     [self setShortcuts:[NSMutableDictionary dictionary]];
     [self setShortcutMonitor:[MASShortcutMonitor sharedMonitor]];
     [self setBindingOptions:@{NSValueTransformerNameBindingOption: NSKeyedUnarchiveFromDataTransformerName}];
@@ -38,14 +40,22 @@
 }
 
 #pragma mark Registration
-
 - (void) bindShortcutWithDefaultsKey: (NSString*) defaultsKeyName toAction: (dispatch_block_t) action
+{
+     [self bindShortcutWithDefaultsKey:defaultsKeyName toAction:action onKeyUp:nil];
+}
+
+- (void) bindShortcutWithDefaultsKey: (NSString*) defaultsKeyName toAction: (dispatch_block_t) action onKeyUp: (dispatch_block_t) actionUp
 {
     NSAssert([defaultsKeyName rangeOfString:@"."].location == NSNotFound,
         @"Illegal character in binding name (“.”), please see http://git.io/x5YS.");
     NSAssert([defaultsKeyName rangeOfString:@" "].location == NSNotFound,
         @"Illegal character in binding name (“ ”), please see http://git.io/x5YS.");
     [_actions setObject:[action copy] forKey:defaultsKeyName];
+    if (actionUp)
+         [_actionsUp setObject:[actionUp copy] forKey:defaultsKeyName];
+     else
+         [_actionsUp removeObjectForKey:defaultsKeyName];
     [self bind:defaultsKeyName
         toObject:[NSUserDefaultsController sharedUserDefaultsController]
         withKeyPath:[@"values." stringByAppendingString:defaultsKeyName]
@@ -57,6 +67,7 @@
     [_shortcutMonitor unregisterShortcut:[_shortcuts objectForKey:defaultsKeyName]];
     [_shortcuts removeObjectForKey:defaultsKeyName];
     [_actions removeObjectForKey:defaultsKeyName];
+    [_actionsUp removeObjectForKey:defaultsKeyName];
     [self unbind:defaultsKeyName];
 }
 
@@ -115,7 +126,7 @@
 
     // Bind new shortcut
     [_shortcuts setObject:newShortcut forKey:key];
-    [_shortcutMonitor registerShortcut:newShortcut withAction:[_actions objectForKey:key]];
+    [_shortcutMonitor registerShortcut:newShortcut withAction:[_actions objectForKey:key] onKeyUp:[_actionsUp objectForKey:key]];
 }
 
 @end

@@ -58,6 +58,15 @@ static void *MASObservingContext = &MASObservingContext;
     });
 }
 
+
+- (void)playShortcutUpFeedback
+{
+     [[NSSound soundNamed:@"Tink"] play];
+     [self.feedbackTextField setStringValue:NSLocalizedString(@"Shortcut unpressed!", @"Feedback that’s displayed when user presses the sample shortcut.")];
+     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+         [self.feedbackTextField setStringValue:@""];
+     });
+}
 // Handle changes in user defaults. We have to check keyPath here to see which of the
 // two checkboxes was changed. This is not very elegant, in practice you could use something
 // like https://github.com/facebook/KVOController with a nicer API.
@@ -81,6 +90,9 @@ static void *MASObservingContext = &MASObservingContext;
     if (enabled) {
         [[MASShortcutBinder sharedBinder] bindShortcutWithDefaultsKey:MASCustomShortcutKey toAction:^{
             [self playShortcutFeedback];
+            
+        } onKeyUp:^{
+            [self playShortcutUpFeedback];
         }];
     } else {
         [[MASShortcutBinder sharedBinder] breakBindingWithDefaultsKey:MASCustomShortcutKey];

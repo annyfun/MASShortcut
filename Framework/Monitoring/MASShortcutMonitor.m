@@ -14,11 +14,26 @@ static OSStatus MASCarbonEventCallback(EventHandlerCallRef, EventRef, void*);
 
 - (instancetype) init
 {
+    
+//    kEventRawKeyDown                = 1,
+//    kEventRawKeyRepeat              = 2,
+//    kEventRawKeyUp                  = 3,
+//    kEventRawKeyModifiersChanged    = 4,
+//    kEventHotKeyPressed             = 5,
+//    kEventHotKeyReleased            = 6
+
     self = [super init];
     [self setHotKeys:[NSMutableDictionary dictionary]];
-    EventTypeSpec hotKeyPressedSpec = { .eventClass = kEventClassKeyboard, .eventKind = kEventHotKeyPressed };
+    EventTypeSpec eventTypeSpecs[] = {
+             { .eventClass = kEventClassKeyboard, .eventKind = kEventHotKeyPressed },
+             { .eventClass = kEventClassKeyboard, .eventKind = kEventHotKeyReleased },
+//             { .eventClass = kEventClassKeyboard, .eventKind = kEventRawKeyDown },
+//             { .eventClass = kEventClassKeyboard, .eventKind = kEventRawKeyRepeat },
+//             { .eventClass = kEventClassKeyboard, .eventKind = kEventRawKeyUp },
+//             { .eventClass = kEventClassKeyboard, .eventKind = kEventRawKeyModifiersChanged }
+    };
     OSStatus status = InstallEventHandler(GetEventDispatcherTarget(), MASCarbonEventCallback,
-        1, &hotKeyPressedSpec, (__bridge void*)self, &_eventHandlerRef);
+        4, eventTypeSpecs, (__bridge void*)self, &_eventHandlerRef);
     if (status != noErr) {
         return nil;
     }
@@ -47,9 +62,15 @@ static OSStatus MASCarbonEventCallback(EventHandlerCallRef, EventRef, void*);
 
 - (BOOL) registerShortcut: (MASShortcut*) shortcut withAction: (dispatch_block_t) action
 {
+     return [self registerShortcut:shortcut withAction:action onKeyUp:nil];
+}
+
+- (BOOL) registerShortcut: (MASShortcut*) shortcut withAction: (dispatch_block_t) action onKeyUp: (dispatch_block_t) actionUp
+{
     MASHotKey *hotKey = [MASHotKey registeredHotKeyWithShortcut:shortcut];
     if (hotKey) {
         [hotKey setAction:action];
+        [hotKey setActionUp:actionUp];
         [_hotKeys setObject:hotKey forKey:shortcut];
         return YES;
     } else {
@@ -81,6 +102,19 @@ static OSStatus MASCarbonEventCallback(EventHandlerCallRef, EventRef, void*);
     if (GetEventClass(event) != kEventClassKeyboard) {
         return;
     }
+    
+    
+//    if (GetEventKind(event) == kEventHotKeyReleased) {
+//        
+//        bool wasCapsLockDown = CGEventSourceKeyState(kCGEventSourceStateHIDSystemState, kVK_Command);
+//
+//        
+//        unsigned short inKeyCode = 0;
+//        unsigned char keyMap[16];
+//        GetKeys((BigEndianUInt32*) &keyMap);
+//        BOOL isPressed =  (0 != ((keyMap[ inKeyCode >> 3] >> (inKeyCode & 7)) & 1));
+//        NSLog(@"%d %d",wasCapsLockDown, isPressed);
+//    }
 
     EventHotKeyID hotKeyID;
     OSStatus status = GetEventParameter(event, kEventParamDirectObject, typeEventHotKeyID, NULL, sizeof(hotKeyID), NULL, &hotKeyID);
@@ -91,7 +125,9 @@ static OSStatus MASCarbonEventCallback(EventHandlerCallRef, EventRef, void*);
     [_hotKeys enumerateKeysAndObjectsUsingBlock:^(MASShortcut *shortcut, MASHotKey *hotKey, BOOL *stop) {
         if (hotKeyID.id == [hotKey carbonID]) {
             if ([hotKey action]) {
-                dispatch_async(dispatch_get_main_queue(), [hotKey action]);
+                dispatch_block_t action = (GetEventKind(event) == kEventHotKeyReleased) ? [hotKey actionUp] : [hotKey action];
+                if (action)
+                    dispatch_async(dispatch_get_main_queue(), action);
             }
             *stop = YES;
         }
